@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Проверка аутентификации пользователя
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Проверка роли пользователя
+    function isDoctor() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'doctor';
+    }
+
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Проверка владельца документа
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Правила для коллекции пользователей
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Правила для коллекции диагнозов
+    match /diagnoses/{diagnosisId} {
+      allow read: if isAuthenticated() && (
+        isDoctor() || 
+        resource.data.patientId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && isDoctor();
+      allow update, delete: if isAuthenticated() && isDoctor() && 
+        resource.data.doctorId == request.auth.uid;
+    }
+
+    // Правила для шаблонов диагнозов
+    match /diagnosisTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Правила для симптомов
+    match /symptoms/{symptomId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Правила для методов диагностики
+    match /diagnosticMethods/{methodId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Правила для курсов лечения
+    match /treatments/{treatmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
